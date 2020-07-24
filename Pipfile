@@ -16,6 +16,7 @@ flask-wtf = "*"
 numpy = "*"
 requests = "*"
 pandas = "*"
+gunicorn = "*"
 
 [requires]
 python_version = "3.8"

@@ -13,12 +13,14 @@ from bs4 import BeautifulSoup
 import pandas as pd
 from lxml import html
 import re
+import sys
+import random
 
 app = Flask(__name__)
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 
-app.config['SECRET_KEY'] = 'something_jkjfnksjf'
+app.config['SECRET_KEY'] ='jbfkesnbfkenfkjwnfkj' #os.environ.get('SECRET_KEY')
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///'+os.path.join(basedir,'details.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 engine = create_engine(app.config['SQLALCHEMY_DATABASE_URI'], echo=False)
@@ -30,50 +32,25 @@ def gen_unique(data):
     data1 = np.array(data)
     return np.unique(data1)
 
-# database models
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(50), unique=True)
-    email = db.Column(db.String(120), unique=True)
-    password = db.Column(db.String(80))
-    
-class Location(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    state = db.Column(db.String(100))
-    city = db.Column(db.String(100))
-    locality = db.Column(db.String(100))
-    link = db.Column(db.String(300))
-
-# Form 
-class Form(FlaskForm):
-    state = SelectField('state', choices=list(gen_unique([i.state for i in Location.query.all()])))
-    city = SelectField('city', choices=[])
-    locality = SelectField('locality', choices=[])
-
-# creating decorator
-def login_required(f):
-    @wraps(f)
-    def wrap(*args, **kwargs):
-        if session['login']==True:
-            return f(*args, **kwargs)
-        else:
-            flash("You need to login first", "danger")
-            return redirect(url_for('login'))
-
-    return wrap
-
-# Menu Request
+header={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.36",
+    "Accept-Encoding": "*",
+    "Connection": "keep-alive",
+    "Accept": "application/json", 
+    "user-key": "API_KEY"
+    } #random.choice(useragent)
 
 def scrapper_links(link):
-    # link input
+    print(link)
     links=[]
     with requests.Session() as s:
         
         nums=6
         i=1
         while i<nums:
-
-            url=s.get("{}?page={}&sort=best&nearby=0".format(link,i),headers={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36"})
+            print(i)
+            print(header)
+            url=s.get("{}?page={}&sort=best&nearby=0".format(link,i), headers=header)
+            print(url.content)
             url_content=url.content
             soup=BeautifulSoup(url_content,"html.parser")
             div=soup.find("div",attrs={"class":"col-l-4 mtop pagination-number"})
@@ -84,6 +61,7 @@ def scrapper_links(link):
                 nums=6
             a=soup.find_all("a",attrs={"data-result-type":"ResCard_Name"})
             for k in a:
+                print(k)
                 links.append(k["href"])
             i=i+1
     links=list(set(links))
@@ -95,11 +73,10 @@ def scrapper_output(links):
         # print(i)
         main=[]
         with requests.Session() as s:
-            url=s.get(i+"/order",
-            headers={"User-Agent":"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/83.0.4103.116 Safari/537.36"})
+            url=s.get(i+"/order", headers=header)
             tree=html.fromstring(url.content)
             url_content=url.content
-            soup=BeautifulSoup(url_content,"html.parser")
+            soup=BeautifulSoup(url_content,"lxml")
             items=soup.find_all("h4",attrs={"class":"sc-1s0saks-13 btodhQ"})
             price=soup.find_all("span",attrs={"class":"sc-17hyc2s-1 fnhnBd"})
             
@@ -122,6 +99,41 @@ def scrapper_output(links):
             output.append({i.split("/")[-1]:main}) # Ouput for another code
             #pd.DataFrame(main,columns=["Items","Price","Category"]).to_csv("Menu_Bikaner/"+i.split("/")[-1]+".csv")
     return output
+
+# database models
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True)
+    email = db.Column(db.String(120), unique=True)
+    password = db.Column(db.String(80))
+    
+class Location(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    state = db.Column(db.String(100))
+    city = db.Column(db.String(100))
+    locality = db.Column(db.String(100))
+    link = db.Column(db.String(300))
+
+# Form 
+class Form(FlaskForm):
+    state = SelectField('state', choices=list(gen_unique([i.state for i in Location.query.all()])))
+    city = SelectField('city', choices=[])
+    locality = SelectField('locality', choices=[])
+
+
+# creating decorator
+def login_required(f):
+    @wraps(f)
+    def wrap(*args, **kwargs):
+        if session['login']==True:
+            return f(*args, **kwargs)
+        else:
+            flash("You need to login first", "danger")
+            return redirect(url_for('login'))
+
+    return wrap
+
+
 
 
 # routes - views
@@ -193,7 +205,7 @@ def index():
 
 @app.route("/output-gen/", methods=['GET'])
 def scrap_data():
-    link = session.get('link', None)
+    link = session.get('link')
     links = scrapper_links(link)
     output = scrapper_output(links)
     return jsonify(output)
@@ -202,6 +214,9 @@ def scrap_data():
 def home():
     return render_template('home.html')
 
+sys.stdout.flush()
+
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run()
+
 
